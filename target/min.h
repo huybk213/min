@@ -15,7 +15,7 @@
 // -  Define NO_TRANSPORT_PROTOCOL to remove the code and other overheads of dealing with transport frames. Any
 //    transport frames sent from the other side are dropped.
 //
-// -  Define MAX_PAYLOAD if the size of the frames is to be limited. This is particularly useful with the transport
+// -  Define MIN_MAX_PAYLOAD if the size of the frames is to be limited. This is particularly useful with the transport
 //    protocol where a deep FIFO is wanted but not for large frames.
 //
 // The API is as follows:
@@ -63,6 +63,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define NO_TRANSPORT_PROTOCOL
+
 #ifdef ASSERTION_CHECKING
 #include <assert.h>
 #endif
@@ -71,8 +73,8 @@
 #define TRANSPORT_PROTOCOL
 #endif
 
-#ifndef MAX_PAYLOAD
-#define MAX_PAYLOAD                                 (255U)
+#ifndef MIN_MAX_PAYLOAD
+#define MIN_MAX_PAYLOAD                                 (255U)
 #endif
 
 // Powers of two for FIFO management. Default is 16 frames in the FIFO, total of 1024 bytes for frame data
@@ -86,7 +88,7 @@
 #define TRANSPORT_FIFO_MAX_FRAMES                   (1U << TRANSPORT_FIFO_SIZE_FRAMES_BITS)
 #define TRANSPORT_FIFO_MAX_FRAME_DATA               (1U << TRANSPORT_FIFO_SIZE_FRAME_DATA_BITS)
 
-#if (MAX_PAYLOAD > 255)
+#if (MIN_MAX_PAYLOAD > 255)
 #error "MIN frame payloads can be no bigger than 255 bytes"
 #endif
 
@@ -136,46 +138,78 @@ struct transport_fifo {
 };
 #endif
 
-struct min_context {
+typedef struct
+{
+    uint8_t id;
+    uint8_t len;
+    uint8_t * payload;
+} min_msg_t;
+
+typedef enum
+{
+    MIN_TX_BEGIN,
+    MIN_TX_END
+} min_tx_signal_t;
+
+typedef void (*min_tx_byte_cb)(void * ctx, uint8_t data);
+typedef void (*min_rx_frame_cb)(void * ctx, min_msg_t * frame);
+typedef void (*min_tx_dma_cb)(void * ctx, uint8_t * msg, uint8_t len);
+typedef uint32_t (*min_tx_fifo_space_avaliable)(void * ctx);
+typedef void (*min_frame_signal_cb)(void * ctx, min_tx_signal_t signal);
+
+typedef struct 
+{
+    min_rx_frame_cb rx_callback;
+    min_tx_byte_cb tx_byte;
+    min_tx_dma_cb tx_frame;      // For DMA enable
+    min_tx_fifo_space_avaliable tx_space;
+    min_frame_signal_cb signal;
+    bool use_dma_frame;
+} min_frame_cb_t;
+
+typedef struct {
 #ifdef TRANSPORT_PROTOCOL
     struct transport_fifo transport_fifo;           // T-MIN queue of outgoing frames
 #endif
-    uint8_t rx_frame_payload_buf[MAX_PAYLOAD];      // Payload received so far
+    min_frame_cb_t cb;
+    uint8_t * rx_frame_payload_buf;                 // Payload received so far
+    uint8_t * tx_frame_payload_buf;                 // Payload tx
     uint32_t rx_frame_checksum;                     // Checksum received over the wire
     struct crc32_context rx_checksum;               // Calculated checksum for receiving frame
     struct crc32_context tx_checksum;               // Calculated checksum for sending frame
     uint8_t rx_header_bytes_seen;                   // Countdown of header bytes to reset state
     uint8_t rx_frame_state;                         // State of receiver
     uint8_t rx_frame_payload_bytes;                 // Length of payload received so far
+    uint8_t tx_frame_payload_bytes;                 // Length of payload received so far
     uint8_t rx_frame_id_control;                    // ID and control bit of frame being received
     uint8_t rx_frame_seq;                           // Sequence number of frame being received
     uint8_t rx_frame_length;                        // Length of frame
     uint8_t rx_control;                             // Control byte
     uint8_t tx_header_byte_countdown;               // Count out the header bytes
     uint8_t port;                                   // Number of the port associated with the context
-};
+} min_context_t;
 
 #ifdef TRANSPORT_PROTOCOL
 // Queue a MIN frame in the transport queue
-bool min_queue_frame(struct min_context *self, uint8_t min_id, uint8_t *payload, uint8_t payload_len);
+bool min_queue_frame(min_context_t *self, uint8_t min_id, uint8_t *payload, uint8_t payload_len);
 
 // Determine if MIN has space to queue a transport frame
-bool min_queue_has_space_for_frame(struct min_context *self, uint8_t payload_len);
+bool min_queue_has_space_for_frame(min_context_t * self, uint8_t payload_len);
 #endif
 
 // Send a non-transport frame MIN frame
-void min_send_frame(struct min_context *self, uint8_t min_id, uint8_t *payload, uint8_t payload_len);
+void min_send_frame(min_context_t * self, min_msg_t * msg);
 
 // Must be regularly called, with the received bytes since the last call.
 // NB: if the transport protocol is being used then even if there are no bytes
 // this call must still be made in order to drive the state machine for retransmits.
-void min_poll(struct min_context *self, uint8_t *buf, uint32_t buf_len);
+void min_poll(min_context_t * self, uint8_t *buf, uint32_t buf_len);
 
 // Reset the state machine and (optionally) tell the other side that we have done so
-void min_transport_reset(struct min_context *self, bool inform_other_side);
+void min_transport_reset(min_context_t * self, bool inform_other_side);
 
 // CALLBACK. Handle incoming MIN frame
-void min_application_handler(uint8_t min_id, uint8_t *min_payload, uint8_t len_payload, uint8_t port);
+// void min_application_handler(min_context_t * self, min_msg_t * msg);
 
 #ifdef TRANSPORT_PROTOCOL
 // CALLBACK. Must return current time in milliseconds.
@@ -183,20 +217,13 @@ void min_application_handler(uint8_t min_id, uint8_t *min_payload, uint8_t len_p
 uint32_t min_time_ms(void);
 #endif
 
-// CALLBACK. Must return current buffer space in the given port. Used to check that a frame can be
-// queued.
-uint16_t min_tx_space(uint8_t port);
 
-// CALLBACK. Send a byte on the given line.
-void min_tx_byte(uint8_t port, uint8_t byte);
-
-// CALLBACK. Indcates when frame transmission is finished; useful for buffering bytes into a single serial call.
-void min_tx_start(uint8_t port);
-void min_tx_finished(uint8_t port);
+// // CALLBACK. Send a byte on the given line.
+// void min_tx_byte(struct min_context * self);
 
 // Initialize a MIN context ready for receiving bytes from a serial link
 // (Can have multiple MIN contexts)
-void min_init_context(struct min_context *self, uint8_t port);
+void min_init_context(min_context_t * self);
 
 #ifdef MIN_DEBUG_PRINTING
 // Debug print
