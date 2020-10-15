@@ -682,13 +682,15 @@ void min_init_context(min_context_t * self)
 
 uint32_t min_tx_space(min_context_t * self)
 {
-    return self->cb.tx_space(self);
+    if (self->cb.tx_space)
+        return self->cb.tx_space(self);
+    return 255;
 }
 
 // Sends an application MIN frame on the wire (do not put into the transport queue)
 void min_send_frame(min_context_t * self, min_msg_t * msg)
 {
-    if (!msg || !msg->payload|| msg->len > MIN_MAX_PAYLOAD)
+    if (!msg || msg->len > MIN_MAX_PAYLOAD)
         return;
     
     if ((ON_WIRE_SIZE(msg->len) <= min_tx_space(self))) {
