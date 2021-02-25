@@ -74,7 +74,7 @@
 #endif
 
 #ifndef MIN_MAX_PAYLOAD
-#define MIN_MAX_PAYLOAD                                 (255U)
+#define MIN_MAX_PAYLOAD                                 (250U)
 #endif
 
 // Powers of two for FIFO management. Default is 16 frames in the FIFO, total of 1024 bytes for frame data
@@ -171,7 +171,7 @@ typedef struct {
 #ifdef TRANSPORT_PROTOCOL
     struct transport_fifo transport_fifo;           // T-MIN queue of outgoing frames
 #endif
-    min_frame_cb_t cb;
+    min_frame_cb_t *cb;
     uint8_t * rx_frame_payload_buf;                 // Payload received so far
     uint8_t * tx_frame_payload_buf;                 // Payload tx
     uint32_t rx_frame_checksum;                     // Checksum received over the wire

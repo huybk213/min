@@ -85,16 +85,16 @@ static uint32_t crc32_finalize(struct crc32_context *context)
 
 static void min_tx_byte(min_context_t * self, uint8_t byte)
 {
-    if (self->cb.use_dma_frame == 0)
+    if (self->cb && self->cb->use_dma_frame == 0)
     {
-        self->cb.tx_byte(self, byte);
+        self->cb->tx_byte(self, byte);
     }
     else
     {
         self->tx_frame_payload_buf[self->tx_frame_payload_bytes++] = byte;
-        if (self->tx_frame_payload_bytes == MIN_MAX_PAYLOAD)
+        if (self->cb && self->tx_frame_payload_bytes == MIN_MAX_PAYLOAD)
         {
-            self->cb.tx_frame(self, self->tx_frame_payload_buf, MIN_MAX_PAYLOAD);
+            self->cb->tx_frame(self, self->tx_frame_payload_buf, MIN_MAX_PAYLOAD);
             self->tx_frame_payload_bytes = 0;
         }
     }
@@ -126,8 +126,8 @@ static void on_wire_bytes(min_context_t * self, uint8_t id_control, uint8_t seq,
     self->tx_header_byte_countdown = 2U;
     crc32_init_context(&self->tx_checksum);
 
-   if (self->cb.signal)
-        self->cb.signal(self, MIN_TX_BEGIN);
+   if (self->cb && self->cb->signal)
+        self->cb->signal(self, MIN_TX_BEGIN);
 
     // Header is 3 bytes; because unstuffed will reset receiver immediately
     min_tx_byte(self, HEADER_BYTE);
@@ -160,10 +160,10 @@ static void on_wire_bytes(min_context_t * self, uint8_t id_control, uint8_t seq,
     // Ensure end-of-frame doesn't contain 0xaa and confuse search for start-of-frame
     min_tx_byte(self, EOF_BYTE);
 
-    if (self->cb.signal)
-        self->cb.signal(self, MIN_TX_END);
+    if (self->cb && self->cb->signal)
+        self->cb->signal(self, MIN_TX_END);
 
-    if (self->cb.use_dma_frame){
+    if (self->cb && self->cb->use_dma_frame){
         self->tx_frame_payload_bytes = 0;
     }
 }
@@ -447,8 +447,8 @@ static void valid_frame_received(min_context_t * self)
                     msg.id = MIN_GET_ID(id_control);
                     msg.payload = payload;
                     msg.len = payload_len;
-                    if (self->cb.rx_callback)
-                        self->cb.rx_callback(self, &msg);
+                    if (self->cb && self->cb->rx_callback)
+                        self->cb->rx_callback(self, &msg);
                 } else {
                     // Discard this frame because we aren't looking for it: it's either a dupe because it was
                     // retransmitted when our ACK didn't get through in time, or else it's further on in the
@@ -462,8 +462,8 @@ static void valid_frame_received(min_context_t * self)
                 msg.id = MIN_GET_ID(id_control);
                 msg.payload = payload;
                 msg.len = payload_len;
-                if (self->cb.rx_callback)
-                    self->cb.rx_callback(self, &msg);
+                if (self->cb && self->cb->rx_callback)
+                    self->cb->rx_callback(self, &msg);
                 
             }
             break;
@@ -473,8 +473,8 @@ static void valid_frame_received(min_context_t * self)
     msg.id = MIN_GET_ID(id_control);
     msg.payload = payload;
     msg.len = payload_len;
-    if (self->cb.rx_callback)
-        self->cb.rx_callback(self, &msg);
+    if (self->cb && self->cb->rx_callback)
+        self->cb->rx_callback(self, &msg);
 #endif // TRANSPORT_PROTOCOL
 }
 
@@ -682,8 +682,8 @@ void min_init_context(min_context_t * self)
 
 uint32_t min_tx_space(min_context_t * self)
 {
-    if (self->cb.tx_space)
-        return self->cb.tx_space(self);
+    if (self->cb && self->cb->tx_space)
+        return self->cb->tx_space(self);
     return 255;
 }
 
@@ -762,13 +762,15 @@ int test()
 {
     fake_serial_buffer.index = 0;
 
- 
-    ctx.cb.rx_callback = on_min_rx_frame;
-    ctx.cb.tx_byte = serial_write_byte;
-    ctx.cb.tx_frame = serial_write_frame;
-    ctx.cb.use_dma_frame = true;
-    ctx.cb.signal = serial_signal;
-    ctx.cb.tx_space = serial_tx_space;
+    min_frame_cb_t cb;
+
+    cb.rx_callback = on_min_rx_frame;
+    cb.tx_byte = serial_write_byte;
+    cb.tx_frame = serial_write_frame;
+    cb.use_dma_frame = true;
+    cb.signal = serial_signal;
+    cb.tx_space = serial_tx_space;
+    ctx.cb = &cb;
     ctx.rx_frame_payload_buf = min_rx_buffer;
     ctx.tx_frame_payload_buf = min_tx_buffer;
 
