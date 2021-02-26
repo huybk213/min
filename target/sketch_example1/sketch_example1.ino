@@ -108,7 +108,7 @@ void loop() {
   // one or in a chunk (other than for efficiency) so this can match the way in which
   // serial handling is done (e.g. in some systems the serial port hardware register could
   // be polled and a byte pushed into MIN as it arrives).
-  min_poll(&min_ctx, (uint8_t *)buf, (uint8_t)buf_len);
+  min_rx_feed(&min_ctx, (uint8_t *)buf, (uint8_t)buf_len);
 
   // Every 1s send a MIN frame using the reliable transport stream.
   uint32_t now = millis();

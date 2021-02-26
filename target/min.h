@@ -32,7 +32,7 @@
 // -  min_queue_frame()
 //    This queues a transport frame which will will be retransmitted until the other side receives it correctly.
 //
-// -  min_poll()
+// -  min_rx_feed()
 //    This passes in received bytes to the context associated with the source. Note that if the transport protocol
 //    is included then this must be called regularly to operate the transport state machine even if there are no
 //    incoming bytes.
@@ -153,18 +153,24 @@ typedef enum
 
 typedef bool (*min_tx_byte_cb_t)(void * ctx, uint8_t data);
 typedef void (*min_rx_frame_cb_t)(void * ctx, min_msg_t * frame);
+typedef void (*min_rx_timeout_cb_t)(void *ctx);
 typedef void (*min_tx_dma_cb_t)(void * ctx, uint8_t * msg, uint8_t len);
 typedef uint32_t (*min_tx_fifo_space_avaliable_cb_t)(void * ctx);
 typedef void (*min_frame_signal_cb_t)(void * ctx, min_tx_signal_t signal);
-
+typedef uint32_t (*min_get_ms_cb_t)(void);
 typedef struct 
 {
     min_rx_frame_cb_t rx_callback;
+    min_rx_timeout_cb_t timeout_callback;
     min_tx_byte_cb_t tx_byte;
     min_tx_dma_cb_t tx_frame;      // For DMA enable
     min_tx_fifo_space_avaliable_cb_t tx_space;
     min_frame_signal_cb_t signal;
+    min_get_ms_cb_t get_ms;
     bool use_dma_frame;
+    bool use_timeout_method;
+    uint32_t timeout_not_seen_rx;
+    uint32_t last_rx_time;
 } min_frame_cb_t;
 
 typedef struct {
@@ -203,7 +209,7 @@ void min_send_frame(min_context_t * self, min_msg_t * msg);
 // Must be regularly called, with the received bytes since the last call.
 // NB: if the transport protocol is being used then even if there are no bytes
 // this call must still be made in order to drive the state machine for retransmits.
-void min_poll(min_context_t * self, uint8_t *buf, uint32_t buf_len);
+void min_rx_feed(min_context_t * self, uint8_t *buf, uint32_t buf_len);
 
 // Reset the state machine and (optionally) tell the other side that we have done so
 void min_transport_reset(min_context_t * self, bool inform_other_side);
@@ -234,5 +240,8 @@ void min_debug_print(const char *msg, ...);
 
 // Test only
 void min_print_get_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t *len);
+
+
+void min_reset_buffer_when_timeout(min_context_t *self);
 
 #endif //MIN_H

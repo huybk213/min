@@ -681,10 +681,14 @@ static void rx_byte(min_context_t * self, uint8_t byte)
 }
 
 // API call: sends received bytes into a MIN context and runs the transport timeouts
-void min_poll(min_context_t * self, uint8_t *buf, uint32_t buf_len)
+void min_rx_feed(min_context_t * self, uint8_t *buf, uint32_t buf_len)
 {
     if (!self || !buf || buf_len == 0)
         return;
+
+    if (self->cb && self->cb->get_ms && self->cb->use_timeout_method){
+        self->cb->last_rx_time = self->cb->get_ms();
+    }
 
     for(uint32_t i = 0; i < buf_len; i++) {
         rx_byte(self, buf[i]);
@@ -787,6 +791,31 @@ void min_print_get_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t 
     on_wire_output_buffer(MIN_GET_ID(input_msg->id), 0, input_msg->payload, 0, 0xFFFFU, input_msg->len, output, len);
 }
 
+void min_reset_buffer_when_timeout(min_context_t *self)
+{
+    if (self->cb && self->cb->use_timeout_method && self->cb->get_ms)
+    {
+        uint32_t now = self->cb->get_ms();
+        uint32_t diff;
+        if (now < self->cb->last_rx_time)
+        {
+            diff = (0xFFFFFFFF - self->cb->last_rx_time) + now;
+        }
+        else
+        {
+            diff = now - self->cb->last_rx_time;
+        }
+
+        if (diff >= self->cb->timeout_not_seen_rx)
+        {
+            self->cb->last_rx_time = now;
+            if (self->cb->timeout_callback && self->rx_frame_state != SEARCHING_FOR_SOF)
+                self->cb->timeout_callback(self);
+
+            self->rx_frame_state = SEARCHING_FOR_SOF;
+        }
+    }
+}
 #if 0 // test
 
 #define SERIAL_PAYLOAD_SZ   (MIN_MAX_PAYLOAD+200)
@@ -836,7 +865,7 @@ void serial_signal(void* ctx, min_tx_signal_t signal)
     else
     {
         DebugPrint("Transmit frame end\r\n");
-        min_poll(min_ctx, min_ctx->tx_frame_payload_buf, min_ctx->tx_frame_payload_bytes);
+        min_rx_feed(min_ctx, min_ctx->tx_frame_payload_buf, min_ctx->tx_frame_payload_bytes);
     }
 }
 

@@ -79,7 +79,7 @@ void loop() {
   else {
     buf_len = 0;
   }
-  min_poll(&min_ctx, (uint8_t *)buf, (uint8_t)buf_len);
+  min_rx_feed(&min_ctx, (uint8_t *)buf, (uint8_t)buf_len);
 }
 
 
