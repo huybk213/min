@@ -151,19 +151,19 @@ typedef enum
     MIN_TX_END
 } min_tx_signal_t;
 
-typedef void (*min_tx_byte_cb)(void * ctx, uint8_t data);
-typedef void (*min_rx_frame_cb)(void * ctx, min_msg_t * frame);
-typedef void (*min_tx_dma_cb)(void * ctx, uint8_t * msg, uint8_t len);
-typedef uint32_t (*min_tx_fifo_space_avaliable)(void * ctx);
-typedef void (*min_frame_signal_cb)(void * ctx, min_tx_signal_t signal);
+typedef bool (*min_tx_byte_cb_t)(void * ctx, uint8_t data);
+typedef void (*min_rx_frame_cb_t)(void * ctx, min_msg_t * frame);
+typedef void (*min_tx_dma_cb_t)(void * ctx, uint8_t * msg, uint8_t len);
+typedef uint32_t (*min_tx_fifo_space_avaliable_cb_t)(void * ctx);
+typedef void (*min_frame_signal_cb_t)(void * ctx, min_tx_signal_t signal);
 
 typedef struct 
 {
-    min_rx_frame_cb rx_callback;
-    min_tx_byte_cb tx_byte;
-    min_tx_dma_cb tx_frame;      // For DMA enable
-    min_tx_fifo_space_avaliable tx_space;
-    min_frame_signal_cb signal;
+    min_rx_frame_cb_t rx_callback;
+    min_tx_byte_cb_t tx_byte;
+    min_tx_dma_cb_t tx_frame;      // For DMA enable
+    min_tx_fifo_space_avaliable_cb_t tx_space;
+    min_frame_signal_cb_t signal;
     bool use_dma_frame;
 } min_frame_cb_t;
 
@@ -231,5 +231,8 @@ void min_debug_print(const char *msg, ...);
 #else
 #define min_debug_print(...)
 #endif
+
+// Test only
+void min_print_get_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t *len);
 
 #endif //MIN_H

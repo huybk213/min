@@ -168,6 +168,85 @@ static void on_wire_bytes(min_context_t * self, uint8_t id_control, uint8_t seq,
     }
 }
 
+// test only
+static void stuffed_tx_output(uint8_t* output, uint32_t *size, uint32_t *crc, uint8_t *tx_header_byte_countdown, uint8_t byte)
+{
+    // Transmit the byte
+    uint32_t tmp_size = *size;
+    uint32_t tmp_crc = *crc;
+    uint8_t tmp_header_cnt = *tx_header_byte_countdown;
+    output[tmp_size++] = byte;
+
+    tmp_crc ^= byte;
+    for (uint32_t j = 0; j < 8; j++) {
+        uint32_t mask = (uint32_t) -(tmp_crc & 1U);
+        tmp_crc= (tmp_crc >> 1) ^ (0xEDB88320U & mask);
+    }
+
+    // See if an additional stuff byte is needed
+    if (byte == HEADER_BYTE) {
+        if (--tmp_header_cnt == 0) {
+            output[tmp_size++] = STUFF_BYTE;        // Stuff byte
+            tmp_header_cnt = 2U;
+        }
+    }
+    else {
+        tmp_header_cnt = 2U;
+    }
+
+    *tx_header_byte_countdown = tmp_header_cnt;
+    *crc = tmp_crc;
+    *size = tmp_size;
+}
+
+static void on_wire_output_buffer(uint8_t id_control, 
+                                    uint8_t seq, 
+                                    uint8_t *payload_base, 
+                                    uint16_t payload_offset, 
+                                    uint16_t payload_mask, 
+                                    uint8_t payload_len,
+                                    uint8_t *output,
+                                    uint32_t *size)
+{
+    uint8_t n, i;
+    uint32_t checksum;
+    uint8_t tx_header_byte_countdown = 2U;
+    uint32_t init_crc = 0xFFFFFFFFU;
+    *size = 0;
+    uint32_t tmp_size = 0;
+
+    // Header is 3 bytes; because unstuffed will reset receiver immediately
+    output[tmp_size++] = HEADER_BYTE;
+    output[tmp_size++] = HEADER_BYTE;
+    output[tmp_size++] = HEADER_BYTE;
+
+    stuffed_tx_output(output, &tmp_size, &init_crc, &tx_header_byte_countdown, id_control);
+    if (id_control & 0x80U) {
+        // Send the sequence number if it is a transport frame
+        stuffed_tx_output(output, &tmp_size, &init_crc, &tx_header_byte_countdown, seq);
+    }
+
+    stuffed_tx_output(output, &tmp_size, &init_crc, &tx_header_byte_countdown, payload_len);
+
+    for(i = 0, n = payload_len; n > 0; n--, i++) {
+        stuffed_tx_output(output, &tmp_size, &init_crc, &tx_header_byte_countdown, payload_base[payload_offset]);
+        payload_offset++;
+        payload_offset &= payload_mask;
+    }
+
+    checksum = ~init_crc;
+
+    // Network order is big-endian. A decent C compiler will spot that this
+    // is extracting bytes and will use efficient instructions.
+    stuffed_tx_output(output, &tmp_size, &init_crc, &tx_header_byte_countdown, (uint8_t)((checksum >> 24) & 0xFFU));
+    stuffed_tx_output(output, &tmp_size, &init_crc, &tx_header_byte_countdown, (uint8_t)((checksum >> 16) & 0xFFU));
+    stuffed_tx_output(output, &tmp_size, &init_crc, &tx_header_byte_countdown, (uint8_t)((checksum >> 8) & 0xFFU));
+    stuffed_tx_output(output, &tmp_size, &init_crc, &tx_header_byte_countdown, (uint8_t)((checksum >> 0) & 0xFFU));
+
+    // Ensure end-of-frame doesn't contain 0xaa and confuse search for start-of-frame
+    output[tmp_size++] = EOF_BYTE;
+    *size = tmp_size;
+}
 #ifdef TRANSPORT_PROTOCOL
 
 // Pops frame from front of queue, reclaims its ring buffer space
@@ -696,6 +775,16 @@ void min_send_frame(min_context_t * self, min_msg_t * msg)
     if ((ON_WIRE_SIZE(msg->len) <= min_tx_space(self))) {
         on_wire_bytes(self, MIN_GET_ID(msg->id), 0, msg->payload, 0, 0xFFFFU, msg->len);
     }
+}
+
+void min_print_get_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t *len)
+{
+    if (!input_msg || input_msg->len > MIN_MAX_PAYLOAD)
+        return;
+
+    *len = 0;
+
+    on_wire_output_buffer(MIN_GET_ID(input_msg->id), 0, input_msg->payload, 0, 0xFFFFU, input_msg->len, output, len);
 }
 
 #if 0 // test
