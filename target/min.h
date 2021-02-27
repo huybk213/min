@@ -239,7 +239,7 @@ void min_debug_print(const char *msg, ...);
 #endif
 
 // Test only
-void min_print_get_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t *len);
+void min_build_raw_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t *len);
 
 
 void min_reset_buffer_when_timeout(min_context_t *self);

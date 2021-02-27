@@ -781,7 +781,7 @@ void min_send_frame(min_context_t * self, min_msg_t * msg)
     }
 }
 
-void min_print_get_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t *len)
+void min_build_raw_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t *len)
 {
     if (!input_msg || input_msg->len > MIN_MAX_PAYLOAD)
         return;
