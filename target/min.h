@@ -238,6 +238,8 @@ void min_debug_print(const char *msg, ...);
 #define min_debug_print(...)
 #endif
 
+uint32_t min_estimate_frame_output_size(min_msg_t *input_msg, uint32_t *len);
+
 // Test only
 void min_build_raw_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t *len);
 
