@@ -875,7 +875,9 @@ void min_build_raw_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t 
 
 void min_reset_buffer_when_timeout(min_context_t *self)
 {
-    if (self->cb && self->cb->use_timeout_method && self->cb->get_ms)
+    if (self->cb 
+        && self->cb->use_timeout_method 
+        && self->cb->get_ms)
     {
         uint32_t now = self->cb->get_ms();
         uint32_t diff;
@@ -891,8 +893,11 @@ void min_reset_buffer_when_timeout(min_context_t *self)
         if (diff >= self->cb->timeout_not_seen_rx)
         {
             self->cb->last_rx_time = now;
-            if (self->cb->timeout_callback && self->rx_frame_state != SEARCHING_FOR_SOF)
+            if (self->cb->timeout_callback 
+                && self->rx_frame_state != SEARCHING_FOR_SOF)
+            {
                 self->cb->timeout_callback(self);
+            }
 
             self->rx_frame_state = SEARCHING_FOR_SOF;
         }

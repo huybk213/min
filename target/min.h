@@ -238,12 +238,24 @@ void min_debug_print(const char *msg, ...);
 #define min_debug_print(...)
 #endif
 
+/**
+ * @brief       Estimate frame output size, suitable for DMA
+ * @retval      Frame output size 
+ */
 uint32_t min_estimate_frame_output_size(min_msg_t *input_msg, uint32_t *len);
 
 // Test only
+/**
+ * @brief       Build raw frame output
+ * @param[in]   input_msg Inout message
+ * @param[out]  output Output buffer hold data
+ * @param[out]  len Output buffer len
+ */
 void min_build_raw_frame_output(min_msg_t *input_msg, uint8_t *output, uint32_t *len);
 
-
+/**
+ * @brief       Reset frame when timeout no received UART interrupt
+ */
 void min_reset_buffer_when_timeout(min_context_t *self);
 
 #endif //MIN_H
